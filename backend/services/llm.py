@@ -31,7 +31,8 @@ def generate_response(prompt: str, json_format: bool = False, model: str = "Qwen
             {"role": "user", "content": prompt}
         ],
         "max_tokens": 512,
-        "temperature": 0.3
+        "temperature": 0.3,
+        "options": {"wait_for_model": True}
     }
 
     try:

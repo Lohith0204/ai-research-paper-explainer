@@ -3,12 +3,14 @@ import numpy as np
 from backend.services.embeddings import generate_embeddings
 from backend.vectorstore.faiss_store import vector_store
 
-def retrieve_and_rerank(paper_id: str, query: str, top_k: int = 5, is_summary: bool = False) -> List[Dict]:
+async def retrieve_and_rerank(paper_id: str, query: str, top_k: int = 5, is_summary: bool = False) -> List[Dict]:
     """
     Retrieves chunks from FAISS and applies lightweight reranking.
-    If is_summary=True, it boosts chunks from 'abstract' or 'conclusion'.
     """
-    query_embedding = generate_embeddings([query])[0]
+    embeddings = await generate_embeddings([query])
+    if len(embeddings) == 0:
+        return []
+    query_embedding = embeddings[0]
     
     fetch_k = top_k * 2
     results = vector_store.search(paper_id, query_embedding, fetch_k)

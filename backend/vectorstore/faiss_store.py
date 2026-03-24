@@ -1,6 +1,5 @@
 import faiss
 import numpy as np
-import json
 import os
 import uuid
 import datetime
@@ -8,77 +7,42 @@ from typing import List, Dict
 
 class VectorStoreManager:
     """
-    Manages isolated FAISS indices per paper and an active registry in data/papers.json.
+    Manages In-Memory FAISS indices for session-based Vercel hosting.
+    No disk persistence to ensure stateless efficiency.
     """
-    def __init__(self, data_dir: str = "data"):
-        self.data_dir = data_dir
-        self.indices_dir = os.path.join(data_dir, "indices")
-        self.registry_path = os.path.join(data_dir, "papers.json")
+    def __init__(self):
         self.dimension = 384
+        self._active_indices = {} # paper_id -> (faiss_index, chunks_data)
+        self._registry = {} # paper_id -> metadata
         
-        os.makedirs(self.indices_dir, exist_ok=True)
-        self._registry = self._load_registry()
-        
-    def _load_registry(self) -> Dict:
-        if os.path.exists(self.registry_path):
-            with open(self.registry_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        return {}
-        
-    def _save_registry(self):
-        with open(self.registry_path, 'w', encoding='utf-8') as f:
-            json.dump(self._registry, f, indent=2)
-            
-    def _get_index_paths(self, paper_id: str):
-        return (
-            os.path.join(self.indices_dir, f"{paper_id}.index"),
-            os.path.join(self.indices_dir, f"{paper_id}.meta.json")
-        )
-
     def add_paper(self, paper_id: str, filename: str, embeddings: np.ndarray, chunks_data: List[Dict]):
         if len(embeddings) == 0:
             return
             
-        index_path, meta_path = self._get_index_paths(paper_id)
-        
         index = faiss.IndexFlatIP(self.dimension)
         embeddings = np.array(embeddings, dtype=np.float32)
         index.add(embeddings)
         
-        faiss.write_index(index, index_path)
-        with open(meta_path, 'w', encoding='utf-8') as f:
-            json.dump(chunks_data, f, ensure_ascii=False)
-            
+        self._active_indices[paper_id] = (index, chunks_data)
+        
         sections = list(set(c.get("section", "general") for c in chunks_data))
-            
         self._registry[paper_id] = {
             "filename": filename,
             "chunks": len(chunks_data),
             "created_at": datetime.datetime.utcnow().isoformat(),
             "sections": sections
         }
-        self._save_registry()
 
     def get_paper_chunks(self, paper_id: str) -> List[Dict]:
-        """Returns all metadata chunks raw for summaries or graph extractions"""
-        _, meta_path = self._get_index_paths(paper_id)
-        if os.path.exists(meta_path):
-            with open(meta_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+        if paper_id in self._active_indices:
+            return self._active_indices[paper_id][1]
         return []
 
     def search(self, paper_id: str, query_embedding: np.ndarray, top_k: int = 5) -> List[Dict]:
-        """Searches specifically inside one paper's isolated vector store."""
-        if paper_id not in self._registry:
+        if paper_id not in self._active_indices:
             return []
             
-        index_path, meta_path = self._get_index_paths(paper_id)
-        if not os.path.exists(index_path):
-            return []
-            
-        index = faiss.read_index(index_path)
-        chunks = self.get_paper_chunks(paper_id)
-        
+        index, chunks = self._active_indices[paper_id]
         query_embedding = np.array([query_embedding], dtype=np.float32)
         
         search_k = min(top_k, index.ntotal)
@@ -101,12 +65,6 @@ class VectorStoreManager:
         return results
 
     def list_papers(self) -> List[Dict]:
-        papers = []
-        for pid, data in self._registry.items():
-            papers.append({
-                "paper_id": pid,
-                **data
-            })
-        return papers
+        return [{"paper_id": pid, **data} for pid, data in self._registry.items()]
 
 vector_store = VectorStoreManager()
