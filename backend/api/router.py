@@ -46,14 +46,14 @@ async def upload_paper(file: UploadFile = File(...)):
             
         chunks = chunk_text(pages_data, settings.CHUNK_SIZE, settings.CHUNK_OVERLAP)
         texts_to_embed = [c["text"] for c in chunks]
-        embeddings = generate_embeddings(texts_to_embed)
+        embeddings = await generate_embeddings(texts_to_embed)
         
         vector_store.add_paper(paper_id, file.filename, embeddings, chunks)
         
         return {
             "paper_id": paper_id,
             "filename": file.filename,
-            "message": "Paper processed structured successfully."
+            "message": "Paper optimized for session-based analysis."
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -61,29 +61,89 @@ async def upload_paper(file: UploadFile = File(...)):
         if os.path.exists(file_path):
             os.remove(file_path)
 
-@router.get("/papers")
-async def list_papers():
-    return {"papers": vector_store.list_papers()}
+# Internal helper functions that return data or raise standard exceptions
+async def _extract_summary(paper_id: str):
+    paper_chunks = vector_store.get_paper_chunks(paper_id)
+    if not paper_chunks:
+        raise ValueError("Paper not found")
+    return summarize_paper_multi_step(paper_chunks)
 
-@router.get("/papers/{paper_id}")
-async def get_paper_metadata(paper_id: str = Path(...)):
-    papers = vector_store.list_papers()
-    for p in papers:
-        if p["paper_id"] == paper_id:
-            return p
-    raise HTTPException(status_code=404, detail="Paper not found")
+async def _extract_insights(paper_id: str):
+    paper_chunks = vector_store.get_paper_chunks(paper_id)
+    if not paper_chunks:
+        raise ValueError("Paper not found")
+    # Balanced context extraction
+    total = len(paper_chunks)
+    indices = list(range(min(3, total)))
+    if total > 6:
+        indices.extend(range(total // 2 - 1, total // 2 + 2))
+    context = [paper_chunks[i]["text"] for i in indices]
+    return extract_insights(context)
+
+async def _extract_graph(paper_id: str):
+    paper_chunks = vector_store.get_paper_chunks(paper_id)
+    if not paper_chunks:
+        raise ValueError("Paper not found")
+    context = [c["text"] for c in paper_chunks[:5]]
+    return extract_knowledge_graph(context)
+
+@router.post("/papers/process")
+async def process_full_paper(file: UploadFile = File(...)):
+    """Fast, single-call analysis for Vercel efficiency."""
+    try:
+        res = await upload_paper(file)
+        paper_id = res["paper_id"]
+        
+        import asyncio
+        async def safe_task(coro):
+            try:
+                return await coro
+            except Exception as e:
+                print(f"Sub-task error in process_full_paper: {str(e)}")
+                return None
+
+        # Run analysis steps in parallel using internal helpers
+        summary, insights, graph = await asyncio.gather(
+            safe_task(_extract_summary(paper_id)),
+            safe_task(_extract_insights(paper_id)),
+            safe_task(_extract_graph(paper_id))
+        )
+        
+        return {
+            **res,
+            "summary": summary or {"tldr": "Analysis failed for this section."},
+            "insights": insights,
+            "graph": graph
+        }
+    except Exception as e:
+        import traceback
+        print(f"CRITICAL: process_full_paper failed: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/papers/{paper_id}/summary")
 async def get_paper_summary(paper_id: str = Path(...)):
     try:
-        paper_chunks = vector_store.get_paper_chunks(paper_id)
-        if not paper_chunks:
-            raise HTTPException(status_code=404, detail="Paper not found")
-            
-        summary = summarize_paper_multi_step(paper_chunks)
-        return summary
-    except HTTPException:
-        raise
+        return await _extract_summary(paper_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/papers/{paper_id}/insights")
+async def get_paper_insights(paper_id: str = Path(...)):
+    try:
+        return await _extract_insights(paper_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/papers/{paper_id}/graph")
+async def get_paper_graph(paper_id: str = Path(...)):
+    try:
+        return await _extract_graph(paper_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -110,7 +170,7 @@ async def ask_question(request: AskRequest, paper_id: str = Path(...)):
         raise HTTPException(status_code=400, detail="Question cannot be empty")
         
     try:
-        results = retrieve_and_rerank(paper_id, request.question, top_k=5)
+        results = await retrieve_and_rerank(paper_id, request.question, top_k=5)
         if not results:
             return {"answer": "Not found in the paper", "context_used": []}
             
@@ -131,44 +191,11 @@ async def search_paper(
     top_k: int = Query(default=settings.TOP_K_RETRIEVAL)
 ):
     try:
-        results = retrieve_and_rerank(paper_id, query, top_k=top_k)
+        results = await retrieve_and_rerank(paper_id, query, top_k=top_k)
         if not results:
             return {"message": "No results found matching your query.", "results": []}
         return {"results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/papers/{paper_id}/insights")
-async def get_paper_insights(paper_id: str = Path(...)):
-    """Extract models, datasets, techniques, metrics."""
-    try:
-        paper_chunks = vector_store.get_paper_chunks(paper_id)
-        if not paper_chunks:
-            raise HTTPException(status_code=404, detail="Paper not found")
-            
-        # Take 3 head and 3 middle chunks for balanced, concise context
-        total = len(paper_chunks)
-        indices = list(range(min(3, total))) # Head 3
-        if total > 6:
-            indices.extend(range(total // 2 - 1, total // 2 + 2)) # Middle 3
-            
-        unique_indices = sorted(list(set(indices)))
-        texts_to_extract = [paper_chunks[i]["text"] for i in unique_indices]
-        
-        insights_data = extract_insights(texts_to_extract)
-        return insights_data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/papers/{paper_id}/graph")
-async def get_paper_graph(paper_id: str = Path(...)):
-    try:
-        paper_chunks = vector_store.get_paper_chunks(paper_id)
-        if not paper_chunks:
-            raise HTTPException(status_code=404, detail="Paper not found")
-            
-        texts_to_extract = [m["text"] for m in paper_chunks[:4]]
-        graph_data = extract_knowledge_graph(texts_to_extract)
-        return graph_data
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# End of router
