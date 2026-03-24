@@ -21,6 +21,21 @@ export default function ResultsView({ paperId, onReset }: { paperId: string; onR
     async function loadData() {
       try {
         setLoading(true);
+        
+        // Try to load from session storage first for instant load
+        const cachedData = sessionStorage.getItem(`paper_${paperId}`);
+        if (cachedData) {
+          const parsed = JSON.parse(cachedData);
+          setData({
+            summary: parsed.summary,
+            insights: parsed.insights,
+            graph: parsed.graph || null
+          });
+          setLoading(false);
+          return;
+        }
+
+        // Fallback for cases where cache is missing (e.g. refresh or direct URL)
         const [summary, insights, graph] = await Promise.all([
           api.getSummary(paperId),
           api.getInsights(paperId).catch(() => null),
