@@ -40,13 +40,16 @@ export default function UploadView({ onUploadComplete }: { onUploadComplete: (id
     setFile(f);
     setStatus("uploading");
     try {
-      const res = await api.uploadPaper(f);
+      const res = await api.processFullPaper(f);
+      // Store full results in sessionStorage for instant retrieval in ResultsView
+      sessionStorage.setItem(`paper_${res.paper_id}`, JSON.stringify(res));
+      
       setStatus("success");
       setTimeout(() => onUploadComplete(res.paper_id), 1000);
     } catch (err: any) {
       console.error(err);
       setStatus("error");
-      setError(err?.response?.data?.detail || "Upload failed. Please try again.");
+      setError(err?.response?.data?.detail || "Analysis failed. Please try again.");
     }
   };
 
