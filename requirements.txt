@@ -3,7 +3,6 @@ uvicorn
 python-multipart
 pydantic-settings
 PyMuPDF
-sentence-transformers
 faiss-cpu
 httpx
 pydantic
