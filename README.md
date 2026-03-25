@@ -90,41 +90,38 @@ To handle the inherent variability in LLM responses (markdown artifacts, varying
 
 ```text
 ai-research-paper-explainer/
-├── backend/              # Research Logic & API
-│   ├── api/              # FastAPI Routes (Papers, Q&A)
-│   ├── core/             # Configuration & Security
-│   ├── services/         # RAG, LLM Integration, Insights
-│   └── vectorstore/      # FAISS Index Management
-├── frontend/             # Next.js Web Application
-│   ├── src/app/          # Layout & Routing
-│   ├── src/components/   # Modular UI Sections
-│   └── public/           # Static Assets (Logo, Icons)
-├── data/                 # Isolated FAISS Indices & Registry
-├── assets/               # Demo GIFs & Media
-├── uploads/              # Temporary Upload Processing
-├── requirements.txt      # Python Dependencies
-└── README.md             # Project Master Info
+├── frontend/             # Root Directory for Vercel
+│   ├── api/              # Vercel Serverless Entry Points (Python)
+│   ├── backend/          # FastAPI & Content Extraction Logic
+│   ├── src/app/          # Next.js Pages & Layouts
+│   └── requirements.txt  # Python Dependencies
+├── data/                 # Local data storage
+├── assets/               # Demo Media
+└── README.md             # Project Info
 ```
 
 ---
 
+## Vercel Deployment (Zero-Config)
+
+This repository is optimized for **Zero-Config Vercel Deployment**.
+
+1. In the Vercel Dashboard, import this repository.
+2. **Important:** Set the **Root Directory** to `frontend`.
+3. Add your `HUGGINGFACE_API_KEY` to your Vercel Environment Variables.
+4. Deploy! Vercel will automatically build the Next.js UI and map the Python FastAPI functions natively.
+
 ## Local Development
 
-1. **Backend Setup**:
-```bash
-# From root directory
-python -m venv venv
-source venv/bin/activate  # venv\Scripts\activate on Windows
-pip install -r requirements.txt
-python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-```
+You can run both Next.js and the Python API natively together using Vercel CLI.
 
-2. **Frontend Setup**:
 ```bash
 cd frontend
 npm install
-npm run dev
+npm i -g vercel
+npx vercel dev
 ```
+*(Ensure you have a `.env` in the `frontend` directory with your Hugging Face API key).*
 
 3. **Configuration**:
 Ensure you have a `.env` file in the root with your `HUGGINGFACE_API_KEY`.
