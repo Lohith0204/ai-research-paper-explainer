@@ -1,4 +1,5 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const isProd = process.env.NODE_ENV === "production";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || (isProd ? "" : "http://localhost:8000");
 const API_URL = `${API_BASE}/api/papers`;
 
 async function handleResponse(res: Response) {
