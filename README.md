@@ -2,13 +2,6 @@
 
 **Deep Insights & Semantic Understanding for Academic Research**
 
----
-
-### 🌐 Live Preview
-- **Research Dashboard**: [Example Live Link](https://ai-research-paper-explainer.example.com/)
-
----
-
 ## Overview
 
 **AI Research Paper Explainer** is a production-oriented platform that helps researchers and developers understand complex academic papers using a specialized **Retrieval-Augmented Generation (RAG)** pipeline.
@@ -102,24 +95,31 @@ ai-research-paper-explainer/
 
 ---
 
-## Vercel Deployment (Zero-Config)
+## Vercel Deployment & Optimization (Production-Ready)
 
-This repository is optimized for **Zero-Config Vercel Deployment**.
+This repository is optimized for **Zero-Config Vercel Deployment** with several hardened engineering decisions:
 
+1. **Serverless Timeout Optimization**: Instead of a monolithic processing request, the frontend decouples document uploading from analysis. It fetches Summary, Insights, and Graphs in parallel. This prevents Vercel's strict Hobby timeouts (10s) and ensures a fast, resilient user experience.
+2. **Native Asset Routing**: Uses a custom `vercel.json` to route all `/api/*` requests directly to the Python serverless environment.
+3. **Security Compliance**: Locked to **Next.js 15.2.0** to resolve specific CVE blocks required by Vercel's automated security scans.
+
+### Deployment Steps:
 1. In the Vercel Dashboard, import this repository.
 2. **Important:** Set the **Root Directory** to `frontend`.
 3. Add your `HUGGINGFACE_API_KEY` to your Vercel Environment Variables.
-4. Deploy! Vercel will automatically build the Next.js UI and map the Python FastAPI functions natively.
+4. Deploy! 
 
 ## Local Development
 
-You can run both Next.js and the Python API natively together using Vercel CLI.
+You can run both Next.js and the Python API natively together using the following steps:
 
 ```bash
+# 1. Update/Install dependencies
 cd frontend
 npm install
-npm i -g vercel
-npx vercel dev
+
+# 2. Run the development environment
+npm run dev
 ```
 *(Ensure you have a `.env` in the `frontend` directory with your Hugging Face API key).*
 
