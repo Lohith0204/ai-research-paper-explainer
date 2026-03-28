@@ -40,9 +40,9 @@ export default function UploadView({ onUploadComplete }: { onUploadComplete: (id
     setFile(f);
     setStatus("uploading");
     try {
-      const res = await api.processFullPaper(f);
-      // Store full results in sessionStorage for instant retrieval in ResultsView
-      sessionStorage.setItem(`paper_${res.paper_id}`, JSON.stringify(res));
+      const res = await api.uploadPaper(f);
+      // We no longer pre-calculate the complete analysis; rely on ResultsView
+      // to parallelize fetching summary, insights, and graph sequentially.
       
       setStatus("success");
       setTimeout(() => onUploadComplete(res.paper_id), 1000);
