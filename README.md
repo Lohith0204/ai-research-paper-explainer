@@ -88,6 +88,7 @@ ai-research-paper-explainer/
 │   ├── backend/          # FastAPI & Content Extraction Logic
 │   ├── src/app/          # Next.js Pages & Layouts
 │   └── requirements.txt  # Python Dependencies
+├── LICENSE
 ├── data/                 # Local data storage
 ├── assets/               # Demo Media
 └── README.md             # Project Info
